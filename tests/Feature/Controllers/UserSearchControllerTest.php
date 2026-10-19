@@ -158,6 +158,48 @@ it('leaves out muted people and people across a block from Algolia matches, up t
         ->assertJsonPath('users.0.id', $reachable->first()?->id);
 });
 
+it('reads further Algolia pages until enough reachable people are found', function (): void {
+    configureAlgolia();
+
+    $viewer = User::factory()->create();
+    $muted = User::factory()->count(24)->create();
+    $reachable = User::factory()->count(3)->create();
+
+    $viewer->muting()->attach($muted);
+
+    Http::fake(['testapp-dsn.algolia.net/*' => fn (Request $request) => Http::response([
+        'hits' => array_map(fn (string $id): array => ['objectID' => $id], match ($request['page']) {
+            0 => $muted->modelKeys(),
+            1 => $reachable->modelKeys(),
+            default => [],
+        }),
+    ])]);
+
+    $this->actingAs($viewer)
+        ->getJson('/search/users?q=dev')
+        ->assertOk()
+        ->assertJsonCount(3, 'users')
+        ->assertJsonPath('users.0.id', $reachable->first()?->id);
+
+    Http::assertSentCount(2);
+});
+
+it('stops reading Algolia pages once the limit is reached', function (): void {
+    configureAlgolia();
+
+    $reachable = User::factory()->count(24)->create();
+
+    Http::fake(['testapp-dsn.algolia.net/*' => Http::response([
+        'hits' => array_map(fn (string $id): array => ['objectID' => $id], $reachable->modelKeys()),
+    ])]);
+
+    $this->getJson('/search/users?q=dev')
+        ->assertOk()
+        ->assertJsonCount(8, 'users');
+
+    Http::assertSentCount(1);
+});
+
 it('searches the database when Algolia fails', function (): void {
     configureAlgolia();
     Http::fake(['testapp-dsn.algolia.net/*' => Http::response([], 500)]);

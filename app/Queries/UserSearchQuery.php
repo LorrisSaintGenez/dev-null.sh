@@ -18,8 +18,8 @@ use Illuminate\Support\Str;
 final readonly class UserSearchQuery
 {
     /**
-     * Algolia doesn't know who the viewer mutes or blocks, so it is asked for more than the limit and the database
-     * leaves those out after.
+     * Algolia doesn't know who the viewer mutes or blocks, so each page asks for more than the limit and the database
+     * leaves those out after. Further pages are read until the limit is reached or Algolia runs out of matches.
      */
     private const int ALGOLIA_OVERFETCH = 3;
 
@@ -45,7 +45,7 @@ final readonly class UserSearchQuery
 
         if ($this->algolia->searches() && $this->features->enabled(Feature::AlgoliaUserSearch)) {
             try {
-                return $this->ranked($this->algolia->search(SearchIndex::Users, $term, $limit * self::ALGOLIA_OVERFETCH), $viewer, $limit);
+                return $this->ranked($term, $viewer, $limit);
             } catch (ConnectionException|RequestException $exception) {
                 report($exception);
             }
@@ -55,20 +55,30 @@ final readonly class UserSearchQuery
     }
 
     /**
-     * @param  list<string>  $ids
      * @return Collection<int, User>
      */
-    private function ranked(array $ids, ?User $viewer, int $limit): Collection
+    private function ranked(string $term, ?User $viewer, int $limit): Collection
     {
-        $positions = array_flip($ids);
+        $perPage = $limit * self::ALGOLIA_OVERFETCH;
+        $users = new Collection();
 
-        return $this->reachable($viewer)
-            ->whereKey($ids)
-            ->get()
-            ->sortBy(fn (User $user): int => $positions[$user->id])
-            ->take($limit)
-            ->values()
-            ->toBase();
+        for ($page = 0; $users->count() < $limit; $page++) {
+            $ids = $this->algolia->search(SearchIndex::Users, $term, $perPage, $page);
+            $positions = array_flip($ids);
+
+            $users = $users
+                ->concat($this->reachable($viewer)
+                    ->whereKey($ids)
+                    ->get()
+                    ->sortBy(fn (User $user): int => $positions[$user->id]))
+                ->unique('id');
+
+            if (count($ids) < $perPage) {
+                break;
+            }
+        }
+
+        return $users->take($limit)->values();
     }
 
     /**

@@ -28,11 +28,12 @@ final readonly class Algolia
 
     /**
      * The ids of the best matches, best first, from the read-only "-dsn" host. Only ids come back: the records are
-     * loaded from the database, which also decides which of them the viewer may see.
+     * loaded from the database, which also decides which of them the viewer may see. Pages start at zero, and a page
+     * shorter than the limit is the last one.
      *
      * @return list<string>
      */
-    public function search(SearchIndex $index, string $query, int $limit): array
+    public function search(SearchIndex $index, string $query, int $limit, int $page = 0): array
     {
         $appId = config()->string('services.algolia.app_id');
 
@@ -43,6 +44,7 @@ final readonly class Algolia
             ->post("https://{$appId}-dsn.algolia.net/1/indexes/{$this->name($index)}/query", [
                 'query' => $query,
                 'hitsPerPage' => $limit,
+                'page' => $page,
                 'attributesToRetrieve' => [],
                 'attributesToHighlight' => [],
                 'attributesToSnippet' => [],
