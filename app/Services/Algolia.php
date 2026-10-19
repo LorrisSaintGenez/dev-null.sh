@@ -39,8 +39,8 @@ final readonly class Algolia
 
         /** @var list<array{objectID: string}> $hits */
         $hits = Http::withHeaders(['X-Algolia-Application-Id' => $appId, 'X-Algolia-API-Key' => config()->string('services.algolia.search_key')])
-            ->connectTimeout(2)
-            ->timeout(5)
+            ->connectTimeout(1)
+            ->timeout(1)
             ->post("https://{$appId}-dsn.algolia.net/1/indexes/{$this->name($index)}/query", [
                 'query' => $query,
                 'hitsPerPage' => $limit,
@@ -50,9 +50,9 @@ final readonly class Algolia
                 'attributesToSnippet' => [],
             ])
             ->throw()
-            ->json('hits');
+            ->json('hits', []);
 
-        return array_map(fn (array $hit): string => $hit['objectID'], $hits);
+        return array_column($hits, 'objectID');
     }
 
     /**

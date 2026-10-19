@@ -136,6 +136,21 @@ it('ranks users as Algolia does once its search key is set', function (): void {
     Http::assertSent(fn (Request $request): bool => $request['query'] === 'nuno' && $request['hitsPerPage'] === 24);
 });
 
+it('skips Algolia hits whose object id is not a user id', function (): void {
+    configureAlgolia();
+
+    $user = User::factory()->create(['username' => 'nuno']);
+
+    Http::fake(['testapp-dsn.algolia.net/1/indexes/testing_users/query' => Http::response([
+        'hits' => [['objectID' => 'added-by-hand'], ['objectID' => $user->id]],
+    ])]);
+
+    $this->getJson('/search/users?q=nuno')
+        ->assertOk()
+        ->assertJsonCount(1, 'users')
+        ->assertJsonPath('users.0.username', 'nuno');
+});
+
 it('leaves out muted people and people across a block from Algolia matches, up to the limit', function (): void {
     configureAlgolia();
 

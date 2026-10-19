@@ -68,7 +68,7 @@ final readonly class UserSearchQuery
 
             $users = $users
                 ->concat($this->reachable($viewer)
-                    ->whereKey($ids)
+                    ->whereKey(array_filter($ids, Str::isUuid(...)))
                     ->get()
                     ->sortBy(fn (User $user): int => $positions[$user->id]))
                 ->unique('id');
