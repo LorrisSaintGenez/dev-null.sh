@@ -475,7 +475,7 @@ it('includes the images and link previews of quoted commits', function (Log $log
 })->with(Log::cases());
 
 it('loads the quoted commits of a log without a query per commit', function (Log $log): void {
-    $user = User::factory()->create(['log' => $log]);
+    $user = User::factory()->create(['log' => $log, 'last_seen_at' => today()]);
 
     $queries = function () use ($user, $log): int {
         DB::flushQueryLog();
@@ -498,6 +498,7 @@ it('loads the quoted commits of a log without a query per commit', function (Log
 it('defers suggested users to follow', function (): void {
     $user = User::factory()->create();
     $suggested = User::factory()->has(Commit::factory())->create();
+    $suggested->following()->attach($user);
 
     $response = $this->actingAs($user)
         ->get('/log/trending');
@@ -510,6 +511,8 @@ it('defers suggested users to follow', function (): void {
                 ->has('suggestedUsers', 1)
                 ->where('suggestedUsers.0.id', $suggested->id)
                 ->where('suggestedUsers.0.followed_by_following_count', 0)
+                ->where('suggestedUsers.0.follows_you', true)
+                ->where('suggestedUsers.0.bio', $suggested->bio)
                 ->missing('suggestedUsers.0.email')));
 
     expect(collect($response->viewData('page')['deferredProps'] ?? [])->flatten())->toContain('suggestedUsers');
